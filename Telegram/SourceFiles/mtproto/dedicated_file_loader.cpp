@@ -12,6 +12,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "main/main_session.h" // Session::account.
 #include "core/application.h"
 #include "base/call_delayed.h"
+#include "base/base_file_utilities.h"
 
 namespace MTP {
 namespace {
@@ -58,7 +59,7 @@ std::optional<DedicatedLoader::File> ParseFile(
 		for (const auto &attribute : fields.vattributes().v) {
 			if (attribute.type() == mtpc_documentAttributeFilename) {
 				const auto &data = attribute.c_documentAttributeFilename();
-				return qs(data.vfile_name());
+				return base::FileNameFromUserString(qs(data.vfile_name()));
 			}
 		}
 		return QString();
