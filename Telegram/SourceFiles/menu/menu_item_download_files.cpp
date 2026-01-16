@@ -162,9 +162,9 @@ void AddAction(
 	const auto saveDocuments = [=](const QString &folderPath) {
 		for (const auto &[document, origin] : documents) {
 			if (!folderPath.isEmpty()) {
-				const auto name =
+				const auto filename =
 					base::FileNameFromUserString(document->filename());
-				document->save(origin, folderPath + name);
+				document->save(origin, folderPath + filename);
 			} else {
 				DocumentSaveClickHandler::SaveAndTrack(origin, document);
 			}
