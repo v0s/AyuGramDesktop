@@ -46,7 +46,7 @@ void initWorker() {
 }
 
 void initRCManager() {
-	RCManager::getInstance().start();
+	// RCManager::getInstance().start();  // disabled to avoid unnecessary requests
 }
 
 void initTranslator() {
