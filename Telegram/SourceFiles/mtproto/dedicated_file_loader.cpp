@@ -60,7 +60,7 @@ std::optional<DedicatedLoader::File> ParseFile(
 		for (const auto &attribute : fields.vattributes().v) {
 			if (attribute.type() == mtpc_documentAttributeFilename) {
 				const auto &data = attribute.c_documentAttributeFilename();
-				return qs(data.vfile_name());
+				return base::FileNameFromUserString(qs(data.vfile_name()));
 			}
 		}
 		return QString();
