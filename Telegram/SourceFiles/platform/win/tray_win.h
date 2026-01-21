@@ -75,6 +75,15 @@ private:
 
 };
 
+struct NotificationBadgeValue {
+	int count = 0;
+	bool muted = true;
+};
+
+[[nodiscard]] NotificationBadgeValue CurrentNotificationBadgeValue();
+void NotificationBadgeUnreadChanged();
+void NotificationBadgeWindowActiveChanged(bool active);
+
 void RefreshTaskbarThemeValue();
 
 } // namespace Platform

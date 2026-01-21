@@ -313,6 +313,7 @@ public:
 	[[nodiscard]] const QString &monoFont() const { return _monoFont.current(); }
 	[[nodiscard]] bool hideNotificationCounters() const { return _hideNotificationCounters.current(); }
 	[[nodiscard]] bool hideNotificationBadge() const { return _hideNotificationBadge.current(); }
+	[[nodiscard]] bool notificationBadgeResetOnFocus() const { return _notificationBadgeResetOnFocus.current(); }
 	[[nodiscard]] bool hideAllChatsFolder() const { return _hideAllChatsFolder.current(); }
 	[[nodiscard]] ChannelBottomButton channelBottomButton() const { return _channelBottomButton.current(); }
 	[[nodiscard]] bool quickAdminShortcuts() const { return _quickAdminShortcuts.current(); }
@@ -397,6 +398,7 @@ public:
 	void setMonoFont(const QString &val);
 	void setHideNotificationCounters(bool val);
 	void setHideNotificationBadge(bool val);
+	void setNotificationBadgeResetOnFocus(bool val);
 	void setHideAllChatsFolder(bool val);
 	void setChannelBottomButton(ChannelBottomButton val);
 	void setQuickAdminShortcuts(bool val);
@@ -550,6 +552,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> hideNotificationCountersChanges() const { return _hideNotificationCounters.changes(); }
 	[[nodiscard]] rpl::producer<bool> hideNotificationBadgeValue() const { return _hideNotificationBadge.value(); }
 	[[nodiscard]] rpl::producer<bool> hideNotificationBadgeChanges() const { return _hideNotificationBadge.changes(); }
+	[[nodiscard]] rpl::producer<bool> notificationBadgeResetOnFocusValue() const { return _notificationBadgeResetOnFocus.value(); }
+	[[nodiscard]] rpl::producer<bool> notificationBadgeResetOnFocusChanges() const { return _notificationBadgeResetOnFocus.changes(); }
 	[[nodiscard]] rpl::producer<bool> hideAllChatsFolderValue() const { return _hideAllChatsFolder.value(); }
 	[[nodiscard]] rpl::producer<bool> hideAllChatsFolderChanges() const { return _hideAllChatsFolder.changes(); }
 	[[nodiscard]] rpl::producer<ChannelBottomButton> channelBottomButtonValue() const { return _channelBottomButton.value(); }
@@ -659,6 +663,7 @@ private:
 	rpl::variable<QString> _monoFont;
 	rpl::variable<bool> _hideNotificationCounters = false;
 	rpl::variable<bool> _hideNotificationBadge = false;
+	rpl::variable<bool> _notificationBadgeResetOnFocus = false;
 	rpl::variable<bool> _hideAllChatsFolder = false;
 	rpl::variable<ChannelBottomButton> _channelBottomButton = ChannelBottomButton::DiscussWithFallback;
 	rpl::variable<bool> _quickAdminShortcuts = true;

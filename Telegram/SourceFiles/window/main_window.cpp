@@ -41,6 +41,10 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "ui/ui_utility.h"
 #include "apiwrap.h"
 #include "mainwidget.h" // session->content()->windowShown().
+
+#ifdef Q_OS_WIN
+#include "platform/win/tray_win.h"
+#endif // Q_OS_WIN
 #include "tray.h"
 #include "styles/style_window.h"
 #include "styles/style_dialogs.h" // ChildSkip().x() for new child windows.
@@ -555,6 +559,11 @@ void MainWindow::handleStateChanged(Qt::WindowState state) {
 
 void MainWindow::handleActiveChanged(bool active) {
 	checkActivation();
+#ifdef Q_OS_WIN
+	Platform::NotificationBadgeWindowActiveChanged(active);
+	unreadCounterChangedHook();
+	Core::App().tray().updateIconCounters();
+#endif // Q_OS_WIN
 	if (active) {
 		Core::App().windowActivated(&controller());
 	}

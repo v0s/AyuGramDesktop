@@ -602,10 +602,10 @@ void MainWindow::unreadCounterChangedHook() {
 }
 
 void MainWindow::updateTaskbarAndIconCounters() {
-	const auto &settings = AyuSettings::getInstance();
-
-	const auto counter = settings.hideNotificationBadge() ? 0 : Core::App().unreadBadge();
-	const auto muted = settings.hideNotificationBadge() ? 0 : Core::App().unreadBadgeMuted();
+	NotificationBadgeUnreadChanged();
+	const auto badge = CurrentNotificationBadgeValue();
+	const auto counter = badge.count;
+	const auto muted = badge.muted;
 	const auto controller = sessionController();
 	const auto session = controller ? &controller->session() : nullptr;
 

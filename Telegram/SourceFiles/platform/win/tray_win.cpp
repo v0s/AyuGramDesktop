@@ -7,10 +7,22 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "platform/win/tray_win.h"
 
+#include "base/flat_map.h"
+#include "base/flat_set.h"
 #include "base/invoke_queued.h"
 #include "base/qt_signal_producer.h"
 #include "core/application.h"
+#include "data/data_thread.h"
+#include "data/data_session.h"
+#include "data/data_saved_sublist.h"
+#include "dialogs/dialogs_indexed_list.h"
+#include "dialogs/dialogs_main_list.h"
+#include "dialogs/dialogs_row.h"
+#include "history/history.h"
+#include "history/history_item.h"
 #include "lang/lang_keys.h"
+#include "main/main_account.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
 #include "storage/localstorage.h"
 #include "ui/painter.h"
@@ -191,9 +203,186 @@ bool DarkTasbarValueValid/* = false*/;
 	return result;
 }
 
+struct FocusBadgeState {
+	int lastUnread = 0;
+	int pending = 0;
+	bool pendingMuted = true;
+	bool windowActive = true;
+	bool lastResetOnFocus = false;
+	bool lastCountUnreadMessages = false;
+	bool lastIncludeMuted = false;
+	bool subscriptionsReady = false;
+	base::flat_set<Data::Thread*> pendingChats;
+	base::flat_map<Data::Thread*, int> lastUnreadMessages;
+	base::flat_set<Main::Account*> watchedAccounts;
+	rpl::lifetime subscriptionsLifetime;
+};
+
+void TrackFocusBadgeNewItem(not_null<HistoryItem*> item);
+
+base::flat_map<Data::Thread*, int> CollectUnreadCounts() {
+	auto result = base::flat_map<Data::Thread*, int>();
+	for (const auto &entry : Core::App().domain().accounts()) {
+		if (const auto session = entry.account->maybeSession()) {
+			for (const auto row : session->data().chatsList()->indexed()->all()) {
+				if (const auto thread = row->thread()) {
+					result.emplace(
+						thread,
+						thread->chatListUnreadState().messages);
+				}
+			}
+		}
+	}
+	return result;
+}
+
+void ResetFocusBadge(FocusBadgeState &state, bool snapshot = false) {
+	state.pending = 0;
+	state.pendingMuted = true;
+	state.pendingChats.clear();
+	state.lastUnreadMessages.clear();
+	state.lastUnread = Core::App().unreadBadge();
+	if (snapshot && !state.windowActive) {
+		state.lastUnreadMessages = CollectUnreadCounts();
+	}
+}
+
+void MaybeCountThread(FocusBadgeState &state, not_null<Data::Thread*> thread) {
+	const auto muted = thread->muted();
+	if (!state.lastIncludeMuted && muted) {
+		return;
+	}
+	const auto key = thread.get();
+	if (!state.pendingChats.insert(key).second) {
+		return;
+	}
+	++state.pending;
+	state.pendingMuted &= muted;
+}
+
+void ScanUnreadMessageChanges(FocusBadgeState &state) {
+	auto current = CollectUnreadCounts();
+	for (const auto &[thread, unread] : current) {
+		if (unread > state.lastUnreadMessages[thread]) {
+			MaybeCountThread(state, not_null{ thread });
+		}
+	}
+	state.lastUnreadMessages = std::move(current);
+}
+
+void SyncFocusBadgeAccounts(FocusBadgeState &state) {
+	base::flat_set<Main::Account*> current;
+	for (const auto &entry : Core::App().domain().accounts()) {
+		const auto account = entry.account.get();
+		current.insert(account);
+		if (state.watchedAccounts.contains(account)) {
+			continue;
+		}
+		account->sessionValue(
+		) | rpl::filter(
+			rpl::mappers::_1 != nullptr
+		) | rpl::on_next([=](Main::Session *session) {
+			session->data().newItemAdded(
+			) | rpl::on_next([=](not_null<HistoryItem*> item) {
+				TrackFocusBadgeNewItem(item);
+			}, session->lifetime());
+		}, account->lifetime());
+	}
+	state.watchedAccounts = std::move(current);
+}
+
+[[nodiscard]] FocusBadgeState &EnsureFocusBadge() {
+	static auto state = FocusBadgeState();
+	const auto resetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus();
+	const auto &coreSettings = Core::App().settings();
+	const auto countUnreadMessages = coreSettings.countUnreadMessages();
+	const auto includeMuted = coreSettings.includeMutedCounter();
+	const auto refresh = !state.subscriptionsReady
+		|| state.lastResetOnFocus != resetOnFocus
+		|| state.lastCountUnreadMessages != countUnreadMessages
+		|| state.lastIncludeMuted != includeMuted;
+	if (refresh) {
+		state.windowActive = Core::App().isActiveForTrayMenu();
+		state.lastResetOnFocus = resetOnFocus;
+		state.lastCountUnreadMessages = countUnreadMessages;
+		state.lastIncludeMuted = includeMuted;
+		ResetFocusBadge(state, resetOnFocus);
+	}
+	if (!state.subscriptionsReady) {
+		state.subscriptionsReady = true;
+		SyncFocusBadgeAccounts(state);
+		const auto statePtr = &state;
+		Core::App().domain().accountsChanges(
+		) | rpl::on_next([=] {
+			SyncFocusBadgeAccounts(*statePtr);
+		}, state.subscriptionsLifetime);
+	}
+	return state;
+}
+
+void TrackFocusBadgeNewItem(not_null<HistoryItem*> item) {
+	auto &state = EnsureFocusBadge();
+	if (!state.lastResetOnFocus
+		|| state.windowActive
+		|| state.lastCountUnreadMessages
+		|| item->out()) {
+		return;
+	}
+	const auto thread = item->savedSublist()
+		? not_null<Data::Thread*>(item->savedSublist())
+		: not_null<Data::Thread*>(item->history());
+	MaybeCountThread(state, thread);
+}
+
 } // namespace
 
+NotificationBadgeValue CurrentNotificationBadgeValue() {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.hideNotificationBadge()) {
+		return {};
+	}
+	if (!settings.notificationBadgeResetOnFocus()) {
+		return {
+			.count = Core::App().unreadBadge(),
+			.muted = Core::App().unreadBadgeMuted(),
+		};
+	}
+	auto &state = EnsureFocusBadge();
+	if (state.windowActive) {
+		ResetFocusBadge(state);
+		return {};
+	}
+	return { state.pending, state.pendingMuted };
+}
+
+void NotificationBadgeUnreadChanged() {
+	auto &state = EnsureFocusBadge();
+
+	const auto current = Core::App().unreadBadge();
+	if (state.lastResetOnFocus && !state.windowActive) {
+		if (state.lastCountUnreadMessages) {
+			if (current > state.lastUnread) {
+				state.pending += (current - state.lastUnread);
+				state.pendingMuted &= Core::App().unreadBadgeMuted();
+			}
+		} else {
+			ScanUnreadMessageChanges(state);
+		}
+	}
+	if (state.windowActive) {
+		ResetFocusBadge(state);
+	}
+	state.lastUnread = current;
+}
+
+void NotificationBadgeWindowActiveChanged(bool active) {
+	auto &state = EnsureFocusBadge();
+	state.windowActive = active;
+	ResetFocusBadge(state, state.lastResetOnFocus);
+}
+
 Tray::Tray() {
+	[[maybe_unused]] const auto &state = EnsureFocusBadge();
 }
 
 void Tray::createIcon() {
@@ -247,6 +436,8 @@ void Tray::updateIcon() {
 	if (!_icon) {
 		return;
 	}
+	NotificationBadgeUnreadChanged();
+	const auto badge = CurrentNotificationBadgeValue();
 	const auto controller = Core::App().activePrimaryWindow();
 	const auto session = !controller
 		? nullptr
@@ -260,8 +451,8 @@ void Tray::updateIcon() {
 		Tray::IconWithCounter(
 			CounterLayerArgs(
 				GetSystemMetrics(SM_CXSMICON),
-				Core::App().unreadBadge(),
-				Core::App().unreadBadgeMuted()),
+				badge.count,
+				badge.muted),
 			true,
 			Core::App().settings().trayIconMonochrome(),
 			session && session->supportMode()));

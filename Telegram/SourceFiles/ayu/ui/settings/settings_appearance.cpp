@@ -72,6 +72,12 @@ void BuildAppIcon(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.getter = &AyuSettings::hideNotificationBadge,
 		.setter = &AyuSettings::setHideNotificationBadge,
 	});
+	ayu.addSettingToggle({
+		.id = u"ayu/notificationBadgeResetOnFocus"_q,
+		.title = tr::ayu_NotificationBadgeResetOnFocus(),
+		.getter = &AyuSettings::notificationBadgeResetOnFocus,
+		.setter = &AyuSettings::setNotificationBadgeResetOnFocus,
+	});
 	builder.addSkip();
 	builder.addDividerText(tr::ayu_HideNotificationBadgeDescription());
 	builder.addSkip();
