@@ -50,7 +50,7 @@ jobs:
       matrix:
         arch: [x64]
         qt: [""]
-        generator: [""]
+        generator: ["Ninja Multi-Config"]
 
     env:
       UPLOAD_ARTIFACT: "true"
@@ -69,6 +69,12 @@ jobs:
           echo TBUILD=%GITHUB_WORKSPACE%\TBuild>>%GITHUB_ENV%
           echo LibrariesPath=%GITHUB_WORKSPACE%\TBuild\Libraries${{ matrix.arch == 'x64' && '\win64' || '' }}>>%GITHUB_ENV%
 
+      - name: Configure sccache environment.
+        run: |
+          if not exist %userprofile%\TBuild\sccache mkdir %userprofile%\TBuild\sccache
+          echo SCCACHE_DIR=%userprofile%\TBuild\sccache>>%GITHUB_ENV%
+          echo SCCACHE_CACHE_SIZE=10G>>%GITHUB_ENV%
+
       - name: Get repository name.
         shell: bash
         run: echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
@@ -77,7 +83,108 @@ jobs:
         uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 0
           path: ${{ env.TBUILD }}\${{ env.REPO_NAME }}
+
+      - name: Restore source mtimes from git history.
+        shell: bash
+        working-directory: ${{ env.TBUILD }}/${{ env.REPO_NAME }}
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+
+          def ensure_full_history(repo):
+              try:
+                  shallow = subprocess.check_output(
+                      ['git', '-C', repo, 'rev-parse', '--is-shallow-repository'],
+                      text=True,
+                      encoding='utf-8',
+                      errors='replace'
+                  ).strip()
+              except subprocess.CalledProcessError:
+                  return
+              if shallow != 'true':
+                  return
+              # Try to unshallow; fall back to a deep fetch if needed.
+              subprocess.call(['git', '-C', repo, 'fetch', '--unshallow'])
+              try:
+                  shallow = subprocess.check_output(
+                      ['git', '-C', repo, 'rev-parse', '--is-shallow-repository'],
+                      text=True,
+                      encoding='utf-8',
+                      errors='replace'
+                  ).strip()
+              except subprocess.CalledProcessError:
+                  return
+              if shallow == 'true':
+                  subprocess.call(['git', '-C', repo, 'fetch', '--depth', '100000'])
+
+          def restore(repo):
+              # Build a set of tracked files for quick lookup.
+              try:
+                  files = subprocess.check_output(
+                      ['git', '-C', repo, 'ls-files', '-z'],
+                      text=False
+                  ).split(b'\0')
+              except subprocess.CalledProcessError:
+                  return
+              remaining = {f.decode('utf-8', 'replace') for f in files if f}
+              if not remaining:
+                  return
+
+              # Walk history newest->oldest and set mtime on first sighting.
+              proc = subprocess.Popen(
+                  ['git', '-C', repo, 'log', '--name-only', '--pretty=format:%ct'],
+                  stdout=subprocess.PIPE,
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace'
+              )
+              ts = None
+              for line in proc.stdout:
+                  line = line.strip()
+                  if not line:
+                      continue
+                  if line.isdigit():
+                      ts = int(line)
+                      continue
+                  if ts is None:
+                      continue
+                  path = line
+                  if path in remaining:
+                      full = os.path.join(repo, path)
+                      try:
+                          os.utime(full, (ts, ts))
+                      except FileNotFoundError:
+                          pass
+                      remaining.remove(path)
+                      if not remaining:
+                          proc.kill()
+                          break
+              proc.wait()
+
+          root = os.getcwd()
+          ensure_full_history(root)
+          restore(root)
+
+          try:
+              sm = subprocess.check_output(
+                  ['git', '-C', root, 'submodule', 'status', '--recursive'],
+                  text=True,
+                  encoding='utf-8',
+                  errors='replace'
+              )
+              for line in sm.splitlines():
+                  parts = line.strip().split()
+                  if len(parts) >= 2:
+                      rel = parts[1]
+                      path = os.path.normpath(os.path.join(root, rel))
+                      ensure_full_history(path)
+                      restore(path)
+          except subprocess.CalledProcessError:
+              pass
+          PY
 
       - name: First set up.
         shell: bash
@@ -102,6 +209,30 @@ jobs:
         with:
           arch: ${{ matrix.arch }}
           sdk: ${{ env.SDK }}
+
+      - name: Install sccache.
+        run: |
+          where sccache >nul 2>nul
+          if %errorlevel% neq 0 (
+            winget install -e --id Mozilla.sccache --accept-source-agreements --accept-package-agreements
+            copy %LOCALAPPDATA%\Microsoft\WinGet\Links\sccache.exe %LOCALAPPDATA%\
+            echo %LOCALAPPDATA%>>%GITHUB_PATH%
+            set "PATH=%PATH%;%LOCALAPPDATA%"
+          )
+          
+          for /f "delims=" %%i in ('where sccache') do echo SCCACHE_EXE=%%i>>%GITHUB_ENV%
+          sccache --version
+
+      - name: Install Ninja.
+        run: |
+          where ninja >nul 2>nul
+          if %errorlevel% neq 0 (
+            winget install -e --id Ninja-build.Ninja --accept-source-agreements --accept-package-agreements
+            copy %LOCALAPPDATA%\Microsoft\WinGet\Links\ninja.exe %LOCALAPPDATA%\
+            echo %LOCALAPPDATA%>>%GITHUB_PATH%
+            set "PATH=%PATH%;%LOCALAPPDATA%"
+          )
+          ninja --version
 
       - name: NuGet sources.
         run: |
@@ -138,6 +269,19 @@ jobs:
             ${{ env.LibrariesPath }}\cache_keys\[qQ]t[_-]*
           key: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-${{ env.CACHE_KEY }}
           restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-${{ matrix.qt || 'qt' }}-
+
+      - name: sccache cache.
+        id: cache-sccache
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.SCCACHE_DIR }}
+          key: ${{ runner.OS }}-${{ matrix.arch }}-sccache-${{ github.run_id }}
+          restore-keys: ${{ runner.OS }}-${{ matrix.arch }}-sccache-
+
+      - name: Start sccache server.
+        run: |
+          sccache --start-server
+          sccache --zero-stats
 
       - name: Libraries.
         env:
@@ -197,6 +341,15 @@ jobs:
           fi
           echo "TDESKTOP_BUILD_API=$API" >> $GITHUB_ENV
 
+      - name: Build output cache.
+        id: cache-build
+        uses: actions/cache@v5
+        with:
+          path: ${{ env.TBUILD }}\${{ env.REPO_NAME }}\out
+          key: ${{ runner.OS }}-${{ matrix.arch }}-out-${{ env.CACHE_KEY }}-${{ matrix.qt || 'qt' }}-ninja-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.OS }}-${{ matrix.arch }}-out-${{ env.CACHE_KEY }}-${{ matrix.qt || 'qt' }}-ninja-
+
       - name: Free up some disk space.
         shell: bash
         run: find $LibrariesPath '(' '(' ! '(' -name '*.lib' -o -name '*.a' -o -name '*.exe' -o -name '*.h' -o -name '*.hpp' -o -name '*.inc' -o -name '*.cmake' -o -path '*/include/*' -o -path '*/objects-*' -o -path '*/cache_keys/*' -o -path '*/patches/*' ')' -type f ')' -o -empty ')' -delete
@@ -211,6 +364,8 @@ jobs:
           %TDESKTOP_BUILD_ARCH% ^
           ${{ matrix.qt }} ^
           %TDESKTOP_BUILD_API% ^
+          -D CMAKE_C_COMPILER_LAUNCHER=%SCCACHE_EXE% ^
+          -D CMAKE_CXX_COMPILER_LAUNCHER=%SCCACHE_EXE% ^
           -D CMAKE_CONFIGURATION_TYPES=Release ^
           -D CMAKE_COMPILE_WARNING_AS_ERROR=ON ^
           -D CMAKE_MSVC_DEBUG_INFORMATION_FORMAT= ^
@@ -218,7 +373,12 @@ jobs:
           -D DESKTOP_APP_DISABLE_CRASH_REPORTS=OFF ^
           %TDESKTOP_BUILD_DEFINE%
 
+          findstr /C:"CMAKE_CXX_COMPILER_LAUNCHER" ..\out\CMakeCache.txt
           cmake --build ..\out --config Release --parallel
+
+      - name: sccache stats.
+        if: env.ONLY_CACHE == 'false'
+        run: sccache --show-stats
 
       - name: Move artifact.
         if: (env.UPLOAD_ARTIFACT == 'true') || (github.ref == 'refs/heads/nightly')
