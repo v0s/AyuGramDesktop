@@ -7,6 +7,7 @@
 #include "settings_appearance.h"
 
 #include "lang_auto.h"
+#include "rpl/variable.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/font_selector.h"
 #include "ayu/ui/components/icon_picker.h"
@@ -18,6 +19,7 @@
 #include "styles/style_settings.h"
 #include "ui/vertical_list.h"
 #include "ui/widgets/buttons.h"
+#include "ui/wrap/slide_wrap.h"
 #include "ui/wrap/vertical_layout.h"
 #include "window/window_session_controller.h"
 
@@ -60,15 +62,48 @@ void SetupAppIcon(not_null<Ui::VerticalLayout*> container) {
 
 #ifdef Q_OS_WIN
 	auto *settings = &AyuSettings::getInstance();
+	const auto hideBadgeValue = container->lifetime().make_state<rpl::variable<bool>>(
+		settings->hideNotificationBadge);
 
 	AddDivider(container);
-	AddSkip(container);
+
+	const auto resetWrap = container->add(
+		object_ptr<Ui::SlideWrap<Ui::VerticalLayout>>(
+			container,
+			object_ptr<Ui::VerticalLayout>(container)));
+	resetWrap->toggleOn(
+		hideBadgeValue->value() | rpl::map([](bool hidden) {
+			return !hidden;
+		}));
+	resetWrap->finishAnimating();
+
+	const auto resetInner = resetWrap->entity();
+	AddSkip(resetInner);
+	const auto resetBadgeButton = AddButtonWithIcon(
+		resetInner,
+		tr::ayu_NotificationBadgeResetOnFocus(),
+		st::settingsButtonNoIcon);
+	resetBadgeButton->toggleOn(
+		rpl::single(settings->notificationBadgeResetOnFocus)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->notificationBadgeResetOnFocus);
+		}) | rpl::on_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_notificationBadgeResetOnFocus(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+
 	AddButtonWithIcon(
 		container,
 		tr::ayu_HideNotificationBadge(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
-		rpl::single(settings->hideNotificationBadge)
+		hideBadgeValue->value()
 	)->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
@@ -78,6 +113,7 @@ void SetupAppIcon(not_null<Ui::VerticalLayout*> container) {
 		[=](bool enabled)
 		{
 			AyuSettings::set_hideNotificationBadge(enabled);
+			hideBadgeValue->force_assign(enabled);
 			AyuSettings::save();
 		},
 		container->lifetime());
