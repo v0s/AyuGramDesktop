@@ -131,6 +131,7 @@ public:
 
 	bool hideNotificationCounters;
 	bool hideNotificationBadge;
+	bool notificationBadgeResetOnFocus;
 	bool hideAllChatsFolder;
 
 	int channelBottomButton;
@@ -238,6 +239,7 @@ void set_monoFont(const QString &val);
 
 void set_hideNotificationCounters(bool val);
 void set_hideNotificationBadge(bool val);
+void set_notificationBadgeResetOnFocus(bool val);
 void set_hideAllChatsFolder(bool val);
 
 void set_channelBottomButton(int val);
@@ -327,6 +329,7 @@ inline void to_json(nlohmann::json &nlohmann_json_j, const AyuGramSettings &nloh
 	NLOHMANN_JSON_TO(showGroupReactions)
 	NLOHMANN_JSON_TO(hideNotificationCounters)
 	NLOHMANN_JSON_TO(hideNotificationBadge)
+	NLOHMANN_JSON_TO(notificationBadgeResetOnFocus)
 	NLOHMANN_JSON_TO(hideAllChatsFolder)
 	NLOHMANN_JSON_TO(channelBottomButton)
 	NLOHMANN_JSON_TO(quickAdminShortcuts)
@@ -412,6 +415,7 @@ inline void from_json(const nlohmann::json &nlohmann_json_j, AyuGramSettings &nl
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(showGroupReactions)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(hideNotificationCounters)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(hideNotificationBadge)
+	NLOHMANN_JSON_FROM_WITH_DEFAULT(notificationBadgeResetOnFocus)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(hideAllChatsFolder)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(channelBottomButton)
 	NLOHMANN_JSON_FROM_WITH_DEFAULT(quickAdminShortcuts)

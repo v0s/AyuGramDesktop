@@ -308,6 +308,7 @@ AyuGramSettings::AyuGramSettings() {
 
 	hideNotificationCounters = false;
 	hideNotificationBadge = false;
+	notificationBadgeResetOnFocus = false;
 	hideAllChatsFolder = false;
 
 	/*
@@ -642,6 +643,10 @@ void set_hideNotificationCounters(bool val) {
 
 void set_hideNotificationBadge(bool val) {
 	settings->hideNotificationBadge = val;
+}
+
+void set_notificationBadgeResetOnFocus(bool val) {
+	settings->notificationBadgeResetOnFocus = val;
 }
 
 void set_hideAllChatsFolder(bool val) {

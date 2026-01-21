@@ -7,6 +7,7 @@
 #include "settings_appearance.h"
 
 #include "lang_auto.h"
+#include "rpl/variable.h"
 #include "ayu/ayu_settings.h"
 #include "ayu/ui/boxes/font_selector.h"
 #include "ayu/ui/components/icon_picker.h"
@@ -60,15 +61,41 @@ void SetupAppIcon(not_null<Ui::VerticalLayout*> container) {
 
 #ifdef Q_OS_WIN
 	auto *settings = &AyuSettings::getInstance();
+	const auto hideBadgeValue = container->lifetime().make_state<rpl::variable<bool>>(
+		settings->hideNotificationBadge);
 
 	AddDivider(container);
 	AddSkip(container);
+	const auto resetBadgeButton = AddButtonWithIcon(
+		container,
+		tr::ayu_NotificationBadgeResetOnFocus(),
+		st::settingsButtonNoIcon
+	);
+	resetBadgeButton->toggleOn(
+		rpl::single(settings->notificationBadgeResetOnFocus)
+	)->toggledValue(
+	) | rpl::filter(
+		[=](bool enabled)
+		{
+			return (enabled != settings->notificationBadgeResetOnFocus);
+		}) | rpl::on_next(
+		[=](bool enabled)
+		{
+			AyuSettings::set_notificationBadgeResetOnFocus(enabled);
+			AyuSettings::save();
+		},
+		container->lifetime());
+	resetBadgeButton->showOn(
+		hideBadgeValue->value() | rpl::map([](bool hidden) {
+			return !hidden;
+		}));
+
 	AddButtonWithIcon(
 		container,
 		tr::ayu_HideNotificationBadge(),
 		st::settingsButtonNoIcon
 	)->toggleOn(
-		rpl::single(settings->hideNotificationBadge)
+		hideBadgeValue->value()
 	)->toggledValue(
 	) | rpl::filter(
 		[=](bool enabled)
@@ -78,6 +105,7 @@ void SetupAppIcon(not_null<Ui::VerticalLayout*> container) {
 		[=](bool enabled)
 		{
 			AyuSettings::set_hideNotificationBadge(enabled);
+			hideBadgeValue->force_assign(enabled);
 			AyuSettings::save();
 		},
 		container->lifetime());

@@ -191,7 +191,96 @@ bool DarkTasbarValueValid/* = false*/;
 	return result;
 }
 
+struct FocusBadgeState {
+	int lastUnread = 0;
+	int pending = 0;
+	bool pendingMuted = true;
+	bool windowActive = true;
+	bool initialized = false;
+	bool lastResetOnFocus = false;
+};
+
+[[nodiscard]] FocusBadgeState &FocusBadge() {
+	static auto state = FocusBadgeState();
+	return state;
+}
+
+void ResetFocusBadge(FocusBadgeState &state) {
+	state.pending = 0;
+	state.pendingMuted = true;
+	state.lastUnread = Core::App().unreadBadge();
+}
+
+void EnsureFocusBadgeState(FocusBadgeState &state) {
+	if (state.initialized) {
+		return;
+	}
+	state.initialized = true;
+	state.windowActive = Core::App().isActiveForTrayMenu();
+	state.lastResetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus;
+	ResetFocusBadge(state);
+}
+
+void SyncResetSetting(FocusBadgeState &state, bool resetOnFocus) {
+	if (state.lastResetOnFocus == resetOnFocus) {
+		return;
+	}
+	state.lastResetOnFocus = resetOnFocus;
+	state.windowActive = Core::App().isActiveForTrayMenu();
+	ResetFocusBadge(state);
+}
+
 } // namespace
+
+NotificationBadgeValue CurrentNotificationBadgeValue() {
+	const auto &settings = AyuSettings::getInstance();
+	if (settings.hideNotificationBadge) {
+		return {};
+	}
+	if (!settings.notificationBadgeResetOnFocus) {
+		return {
+			.count = Core::App().unreadBadge(),
+			.muted = Core::App().unreadBadgeMuted(),
+		};
+	}
+	auto &state = FocusBadge();
+	EnsureFocusBadgeState(state);
+	SyncResetSetting(state, settings.notificationBadgeResetOnFocus);
+	if (state.windowActive) {
+		ResetFocusBadge(state);
+		return {};
+	}
+	return { state.pending, state.pendingMuted };
+}
+
+void NotificationBadgeUnreadChanged() {
+	auto &state = FocusBadge();
+	EnsureFocusBadgeState(state);
+	const auto &settings = AyuSettings::getInstance();
+	SyncResetSetting(state, settings.notificationBadgeResetOnFocus);
+
+	const auto current = Core::App().unreadBadge();
+	if (settings.notificationBadgeResetOnFocus && !state.windowActive) {
+		if (current > state.lastUnread) {
+			state.pending += (current - state.lastUnread);
+			if (!Core::App().unreadBadgeMuted()) {
+				state.pendingMuted = false;
+			}
+		}
+	} else if (state.windowActive) {
+		state.pending = 0;
+		state.pendingMuted = true;
+	}
+	state.lastUnread = current;
+}
+
+void NotificationBadgeWindowActiveChanged(bool active) {
+	auto &state = FocusBadge();
+	EnsureFocusBadgeState(state);
+	state.windowActive = active;
+	state.lastResetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus;
+	ResetFocusBadge(state);
+}
 
 Tray::Tray() {
 }
@@ -247,6 +336,8 @@ void Tray::updateIcon() {
 	if (!_icon) {
 		return;
 	}
+	NotificationBadgeUnreadChanged();
+	const auto badge = CurrentNotificationBadgeValue();
 	const auto controller = Core::App().activePrimaryWindow();
 	const auto session = !controller
 		? nullptr
@@ -260,8 +351,8 @@ void Tray::updateIcon() {
 		Tray::IconWithCounter(
 			CounterLayerArgs(
 				GetSystemMetrics(SM_CXSMICON),
-				Core::App().unreadBadge(),
-				Core::App().unreadBadgeMuted()),
+				badge.count,
+				badge.muted),
 			true,
 			Core::App().settings().trayIconMonochrome(),
 			session && session->supportMode()));
