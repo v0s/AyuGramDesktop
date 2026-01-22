@@ -7,10 +7,15 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "platform/win/tray_win.h"
 
+#include "base/flat_map.h"
+#include "base/flat_set.h"
 #include "base/invoke_queued.h"
 #include "base/qt_signal_producer.h"
 #include "core/application.h"
+#include "data/data_changes.h"
+#include "history/history.h"
 #include "lang/lang_keys.h"
+#include "main/main_account.h"
 #include "main/main_session.h"
 #include "storage/localstorage.h"
 #include "ui/painter.h"
@@ -198,6 +203,17 @@ struct FocusBadgeState {
 	bool windowActive = true;
 	bool initialized = false;
 	bool lastResetOnFocus = false;
+	bool trackingInitialized = false;
+	base::flat_set<not_null<Main::Account*>> trackedAccounts;
+	base::flat_map<not_null<Main::Account*>, rpl::lifetime> accountLifetimes;
+	base::flat_map<not_null<Main::Account*>, Main::Session*> accountSessions;
+	struct SessionState {
+		base::flat_set<not_null<History*>> pendingChats;
+		base::flat_map<not_null<History*>, int> lastUnreadMessages;
+		rpl::lifetime lifetime;
+	};
+	base::flat_map<not_null<Main::Session*>, SessionState> sessions;
+	rpl::lifetime accountsLifetime;
 };
 
 [[nodiscard]] FocusBadgeState &FocusBadge() {
@@ -208,7 +224,111 @@ struct FocusBadgeState {
 void ResetFocusBadge(FocusBadgeState &state) {
 	state.pending = 0;
 	state.pendingMuted = true;
+	for (auto &[session, sessionState] : state.sessions) {
+		sessionState.pendingChats.clear();
+	}
 	state.lastUnread = Core::App().unreadBadge();
+}
+
+void UpdateFocusBadgeSession(
+		FocusBadgeState &state,
+		not_null<Main::Account*> account,
+		Main::Session *session) {
+	const auto sessionIt = state.accountSessions.find(account);
+	if (sessionIt != state.accountSessions.end()
+		&& sessionIt->second == session) {
+		return;
+	}
+	if (sessionIt != state.accountSessions.end() && sessionIt->second) {
+		state.sessions.erase(not_null{ sessionIt->second });
+	}
+	state.accountSessions[account] = session;
+	if (!session) {
+		return;
+	}
+	auto [sessionStateIt, added] = state.sessions.emplace(
+		not_null{ session },
+		FocusBadgeState::SessionState());
+	auto &sessionState = sessionStateIt->second;
+	if (!added) {
+		sessionState.lifetime.destroy();
+	}
+	session->changes().historyUpdates(
+		Data::HistoryUpdate::Flag::UnreadView
+	) | rpl::on_next([&state, session](const Data::HistoryUpdate &update) {
+		auto &sessionState = state.sessions[not_null{ session }];
+		const auto unread = update.history->chatListUnreadState();
+		const auto unreadMessages = unread.messages;
+		auto &lastUnreadMessages = sessionState.lastUnreadMessages;
+		const auto lastIt = lastUnreadMessages.find(update.history);
+		if (lastIt == lastUnreadMessages.end()) {
+			lastUnreadMessages.emplace(update.history, unreadMessages);
+			return;
+		}
+		const auto previous = lastIt->second;
+		lastIt->second = unreadMessages;
+		const auto shouldTrack = state.lastResetOnFocus
+			&& !state.windowActive
+			&& !Core::App().settings().countUnreadMessages();
+		if (shouldTrack
+			&& (unreadMessages > previous)
+			&& (previous > 0)
+			&& !sessionState.pendingChats.contains(update.history)) {
+			const auto includeMuted = Core::App().settings().includeMutedCounter();
+			const auto muted = (unread.messagesMuted >= unread.messages);
+			if (includeMuted || !muted) {
+				sessionState.pendingChats.emplace(update.history);
+				++state.pending;
+				if (!muted) {
+					state.pendingMuted = false;
+				}
+			}
+		}
+	}, sessionState.lifetime);
+}
+
+void TrackFocusBadgeAccount(
+		FocusBadgeState &state,
+		not_null<Main::Account*> account) {
+	state.trackedAccounts.emplace(account);
+	auto &accountLifetime = state.accountLifetimes[account];
+	account->sessionValue(
+	) | rpl::on_next([&state, account](Main::Session *session) {
+		UpdateFocusBadgeSession(state, account, session);
+	}, accountLifetime);
+}
+
+void RefreshFocusBadgeAccounts(FocusBadgeState &state) {
+	const auto &domain = Core::App().domain();
+	auto current = base::flat_set<not_null<Main::Account*>>();
+	for (const auto &entry : domain.accounts()) {
+		const auto account = not_null{ entry.account.get() };
+		current.emplace(account);
+		if (!state.trackedAccounts.contains(account)) {
+			TrackFocusBadgeAccount(state, account);
+		}
+	}
+	auto removed = base::flat_set<not_null<Main::Account*>>();
+	for (const auto &account : state.trackedAccounts) {
+		if (!current.contains(account)) {
+			removed.emplace(account);
+		}
+	}
+	for (const auto &account : removed) {
+		if (const auto it = state.accountSessions.find(account);
+			it != state.accountSessions.end()) {
+			if (it->second) {
+				state.sessions.erase(not_null{ it->second });
+			}
+			state.accountSessions.erase(it);
+		}
+		if (const auto it = state.accountLifetimes.find(account);
+			it != state.accountLifetimes.end()) {
+			it->second.destroy();
+			state.accountLifetimes.erase(it);
+		}
+	}
+	state.trackedAccounts = std::move(current);
 }
 
 void EnsureFocusBadgeState(FocusBadgeState &state) {
@@ -218,6 +338,14 @@ void EnsureFocusBadgeState(FocusBadgeState &state) {
 	state.initialized = true;
 	state.windowActive = Core::App().isActiveForTrayMenu();
 	state.lastResetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus;
+	if (!state.trackingInitialized) {
+		state.trackingInitialized = true;
+		RefreshFocusBadgeAccounts(state);
+		Core::App().domain().accountsChanges(
+		) | rpl::on_next([&state] {
+			RefreshFocusBadgeAccounts(state);
+		}, state.accountsLifetime);
+	}
 	ResetFocusBadge(state);
 }
 
