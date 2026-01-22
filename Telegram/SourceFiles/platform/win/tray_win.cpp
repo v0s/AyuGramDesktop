@@ -11,6 +11,12 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "base/qt_signal_producer.h"
 #include "core/application.h"
 #include "lang/lang_keys.h"
+#include "data/data_changes.h"
+#include "dialogs/dialogs_common.h"
+#include "dialogs/dialogs_entry.h"
+#include "dialogs/dialogs_key.h"
+#include "main/main_account.h"
+#include "main/main_domain.h"
 #include "main/main_session.h"
 #include "storage/localstorage.h"
 #include "ui/painter.h"
@@ -27,6 +33,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include <private/qhighdpiscaling_p.h>
 #include <QSvgRenderer>
 #include <QBuffer>
+#include <set>
 
 // AyuGram includes
 #include "ayu/ayu_settings.h"
@@ -198,6 +205,12 @@ struct FocusBadgeState {
 	bool windowActive = true;
 	bool initialized = false;
 	bool lastResetOnFocus = false;
+	bool lastCountUnreadMessages = true;
+	bool lastIncludeMutedCounter = true;
+	bool subscriptionsInitialized = false;
+	std::set<Dialogs::Key> pendingChats;
+	rpl::lifetime subscriptions;
+	rpl::lifetime sessionSubscriptions;
 };
 
 [[nodiscard]] FocusBadgeState &FocusBadge() {
@@ -205,10 +218,104 @@ struct FocusBadgeState {
 	return state;
 }
 
+[[nodiscard]] int UnreadBadgeCountForState(const Dialogs::UnreadState &state) {
+	const auto &settings = Core::App().settings();
+	const auto includeMuted = settings.includeMutedCounter();
+	return std::max(state.marks - (includeMuted ? 0 : state.marksMuted), 0)
+		+ (settings.countUnreadMessages()
+			? std::max(state.messages - (includeMuted ? 0 : state.messagesMuted), 0)
+			: std::max(state.chats - (includeMuted ? 0 : state.chatsMuted), 0));
+}
+
+[[nodiscard]] bool UnreadBadgeMutedForState(const Dialogs::UnreadState &state) {
+	const auto &settings = Core::App().settings();
+	if (!settings.includeMutedCounter()) {
+		return false;
+	}
+	return (state.marksMuted >= state.marks)
+		&& (settings.countUnreadMessages()
+			? (state.messagesMuted >= state.messages)
+			: (state.chatsMuted >= state.chats));
+}
+
 void ResetFocusBadge(FocusBadgeState &state) {
 	state.pending = 0;
 	state.pendingMuted = true;
+	state.pendingChats.clear();
 	state.lastUnread = Core::App().unreadBadge();
+}
+
+void TrackFocusBadgeEntry(FocusBadgeState &state, Dialogs::Key key) {
+	const auto &settings = AyuSettings::getInstance();
+	if (!settings.notificationBadgeResetOnFocus || state.windowActive) {
+		return;
+	}
+	const auto &coreSettings = Core::App().settings();
+	if (coreSettings.countUnreadMessages()) {
+		return;
+	}
+	const auto unread = key.entry()->chatListUnreadState();
+	if (!unread.known) {
+		return;
+	}
+	const auto counted = UnreadBadgeCountForState(unread);
+	if (counted <= 0) {
+		state.pendingChats.erase(key);
+		return;
+	}
+	if (state.pendingChats.find(key) != state.pendingChats.end()) {
+		return;
+	}
+	state.pendingChats.insert(key);
+	++state.pending;
+	if (!UnreadBadgeMutedForState(unread)) {
+		state.pendingMuted = false;
+	}
+}
+
+void SubscribeFocusBadgeSession(
+		FocusBadgeState &state,
+		not_null<Main::Session*> session,
+		rpl::lifetime &lifetime) {
+	using namespace Data;
+	const auto statePtr = &state;
+	session->changes().historyUpdates(HistoryUpdate::Flag::UnreadView
+	) | rpl::on_next([=](const HistoryUpdate &update) {
+		TrackFocusBadgeEntry(*statePtr, Dialogs::Key(update.history));
+	}, lifetime);
+	session->changes().topicUpdates(TopicUpdate::Flag::UnreadView
+	) | rpl::on_next([=](const TopicUpdate &update) {
+		TrackFocusBadgeEntry(*statePtr, Dialogs::Key(update.topic));
+	}, lifetime);
+	session->changes().sublistUpdates(SublistUpdate::Flag::UnreadView
+	) | rpl::on_next([=](const SublistUpdate &update) {
+		TrackFocusBadgeEntry(*statePtr, Dialogs::Key(update.sublist));
+	}, lifetime);
+}
+
+void RefreshFocusBadgeSessionSubscriptions(FocusBadgeState &state) {
+	state.sessionSubscriptions.destroy();
+	for (const auto &account : Core::App().domain().accounts()) {
+		if (const auto session = account.account->maybeSession()) {
+			SubscribeFocusBadgeSession(
+				state,
+				session,
+				state.sessionSubscriptions);
+		}
+	}
+}
+
+void EnsureFocusBadgeSubscriptions(FocusBadgeState &state) {
+	if (state.subscriptionsInitialized) {
+		return;
+	}
+	state.subscriptionsInitialized = true;
+	RefreshFocusBadgeSessionSubscriptions(state);
+	const auto statePtr = &state;
+	Core::App().domain().accountsChanges(
+	) | rpl::on_next([=] {
+		RefreshFocusBadgeSessionSubscriptions(*statePtr);
+	}, state.subscriptions);
 }
 
 void EnsureFocusBadgeState(FocusBadgeState &state) {
@@ -218,14 +325,24 @@ void EnsureFocusBadgeState(FocusBadgeState &state) {
 	state.initialized = true;
 	state.windowActive = Core::App().isActiveForTrayMenu();
 	state.lastResetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus;
+	state.lastCountUnreadMessages = Core::App().settings().countUnreadMessages();
+	state.lastIncludeMutedCounter = Core::App().settings().includeMutedCounter();
+	EnsureFocusBadgeSubscriptions(state);
 	ResetFocusBadge(state);
 }
 
 void SyncResetSetting(FocusBadgeState &state, bool resetOnFocus) {
+	const auto countUnreadMessages = Core::App().settings().countUnreadMessages();
+	const auto includeMutedCounter = Core::App().settings().includeMutedCounter();
 	if (state.lastResetOnFocus == resetOnFocus) {
-		return;
+		if (state.lastCountUnreadMessages == countUnreadMessages
+			&& state.lastIncludeMutedCounter == includeMutedCounter) {
+			return;
+		}
 	}
 	state.lastResetOnFocus = resetOnFocus;
+	state.lastCountUnreadMessages = countUnreadMessages;
+	state.lastIncludeMutedCounter = includeMutedCounter;
 	state.windowActive = Core::App().isActiveForTrayMenu();
 	ResetFocusBadge(state);
 }
@@ -261,15 +378,18 @@ void NotificationBadgeUnreadChanged() {
 
 	const auto current = Core::App().unreadBadge();
 	if (settings.notificationBadgeResetOnFocus && !state.windowActive) {
-		if (current > state.lastUnread) {
-			state.pending += (current - state.lastUnread);
-			if (!Core::App().unreadBadgeMuted()) {
-				state.pendingMuted = false;
+		if (Core::App().settings().countUnreadMessages()) {
+			if (current > state.lastUnread) {
+				state.pending += (current - state.lastUnread);
+				if (!Core::App().unreadBadgeMuted()) {
+					state.pendingMuted = false;
+				}
 			}
 		}
 	} else if (state.windowActive) {
 		state.pending = 0;
 		state.pendingMuted = true;
+		state.pendingChats.clear();
 	}
 	state.lastUnread = current;
 }
@@ -279,6 +399,8 @@ void NotificationBadgeWindowActiveChanged(bool active) {
 	EnsureFocusBadgeState(state);
 	state.windowActive = active;
 	state.lastResetOnFocus = AyuSettings::getInstance().notificationBadgeResetOnFocus;
+	state.lastCountUnreadMessages = Core::App().settings().countUnreadMessages();
+	state.lastIncludeMutedCounter = Core::App().settings().includeMutedCounter();
 	ResetFocusBadge(state);
 }
 
