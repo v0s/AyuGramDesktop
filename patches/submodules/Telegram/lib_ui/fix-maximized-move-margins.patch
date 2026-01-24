@@ -1,0 +1,29 @@
+diff --git a/ui/platform/win/ui_window_win.cpp b/ui/platform/win/ui_window_win.cpp
+index 819641a..d2b206a 100644
+--- a/ui/platform/win/ui_window_win.cpp
++++ b/ui/platform/win/ui_window_win.cpp
+@@ -572,6 +572,14 @@ bool WindowHelper::filterNativeEvent(
+ 					(WINDOWPOS*)lParam);
+ 			}
+ 		}
++		if (msg == WM_WINDOWPOSCHANGED) {
++			// Moving a maximized window between monitors doesn't emit WM_SIZE,
++			// but the frame metrics may change, so recompute custom margins.
++			const auto style = GetWindowLongPtr(_handle, GWL_STYLE);
++			if (style & WS_MAXIMIZE) {
++				updateMargins();
++			}
++		}
+ 	} return false;
+ 
+ 	case WM_SIZE: {
+@@ -889,6 +897,9 @@ void WindowHelper::updateMargins() {
+ 		margins.setRight(margins.right() - _marginsDelta.right());
+ 		margins.setBottom(margins.bottom() - _marginsDelta.bottom());
+ 		margins.setTop(margins.top() - _marginsDelta.top());
++		// Keep the top margin (negative) to extend into the title area,
++		// but avoid shrinking the client on the other sides when maximized.
++		margins = QMargins(0, margins.top(), 0, 0);
+ 	} else if (!_marginsDelta.isNull()) {
+ 		RECT w;
+ 		GetWindowRect(_handle, &w);
