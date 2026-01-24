@@ -186,6 +186,38 @@ jobs:
               pass
           PY
 
+      - name: Apply submodule patches.
+        shell: bash
+        working-directory: ${{ env.TBUILD }}/${{ env.REPO_NAME }}
+        run: |
+          set -euo pipefail
+          PATCH_ROOT="patches/submodules"
+          if [ ! -d "$PATCH_ROOT" ]; then
+            exit 0
+          fi
+          ROOT_DIR="$(pwd)"
+          find "$PATCH_ROOT" -type f \( -name '*.patch' -o -name '*.diff' \) -print0 \
+            | sort -z \
+            | while IFS= read -r -d '' patch; do
+              rel="${patch#$PATCH_ROOT/}"
+              subdir="${rel%/*}"
+              if [ "$subdir" = "$rel" ]; then
+                echo "Skipping patch without submodule directory: $patch"
+                continue
+              fi
+              target="$subdir"
+              if [ ! -d "$target/.git" ] && [ ! -f "$target/.git" ]; then
+                echo "Submodule not found for patch: $patch (expected $target)"
+                exit 1
+              fi
+              patch_abs="$ROOT_DIR/$patch"
+              echo "Applying $patch_abs to $target"
+              tmp="$(mktemp)"
+              tr -d '\r' < "$patch_abs" > "$tmp"
+              git -C "$target" apply "$tmp"
+              rm -f "$tmp"
+            done
+
       - name: First set up.
         shell: bash
         run: |
