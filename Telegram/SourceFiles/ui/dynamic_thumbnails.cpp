@@ -727,13 +727,15 @@ void EmojiThumbnail::subscribeToUpdates(Fn<void()> callback) {
 		_data,
 		std::move(callback),
 		Data::CustomEmojiSizeTag::Large);
+	if (!emoji) {
+		_emoji = nullptr;
+		return;
+	}
 	_emoji = (_loopLimit > 0)
 		? std::make_unique<Ui::Text::LimitedLoopsEmoji>(
 			std::move(emoji),
 			_loopLimit)
 		: std::move(emoji);
-
-	Ensures(_emoji != nullptr);
 }
 
 std::shared_ptr<DynamicImage> EmojiThumbnail::clone() {

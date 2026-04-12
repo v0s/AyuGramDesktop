@@ -114,7 +114,9 @@ void LargeEmoji::draw(
 				(*image)->load();
 			}
 		} else if (const auto custom = std::get_if<CustomPtr>(&media)) {
-			paintCustom(p, x, y, custom->get(), context);
+			if (const auto raw = custom->get()) {
+				paintCustom(p, x, y, raw, context);
+			}
 		} else {
 			continue;
 		}

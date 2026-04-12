@@ -245,7 +245,9 @@ void CustomEmoji::paintElement(
 	if (const auto sticker = std::get_if<StickerPtr>(&element)) {
 		paintSticker(p, x, y, sticker->get(), context);
 	} else if (const auto custom = std::get_if<CustomPtr>(&element)) {
-		paintCustom(p, x, y, custom->get(), context);
+		if (const auto raw = custom->get()) {
+			paintCustom(p, x, y, raw, context);
+		}
 	}
 }
 

@@ -1183,8 +1183,8 @@ void applyLocalPremiumEmoji(TextWithEntities &text) {
 				if (emoji && emojiLength == entityText.size()) {
 					const auto emojiId = match.captured(1);
 					auto ok = false;
-					emojiId.toULongLong(&ok);
-					if (ok) {
+					const auto parsedId = emojiId.toULongLong(&ok);
+					if (ok && parsedId != 0) {
 						entity = EntityInText(
 							EntityType::CustomEmoji,
 							entity.offset(),
