@@ -137,32 +137,20 @@ struct IdSearchQuery {
 }
 
 [[nodiscard]] IdSearchQuery ParseIdSearchQuery(const QString &query) {
-	if (query.startsWith(u"id:"_q, Qt::CaseInsensitive)
-		|| query.startsWith(u"id "_q, Qt::CaseInsensitive)) {
-		const auto idPart = query.mid(3).trimmed();
-		if (idPart.startsWith(u"-100"_q)) {
-			const auto chatId = idPart.mid(4);
-			if (chatId.length() >= 1 && IsNumericString(chatId)) {
-				return { IdSearchType::ChatOnly, chatId.toLongLong() };
-			}
-			return {};
-		}
-		if (idPart.length() >= 5 && IsNumericString(idPart)) {
-			return { IdSearchType::Both, idPart.toLongLong() };
-		}
+	if (!query.startsWith(u"id:"_q, Qt::CaseInsensitive)) {
 		return {};
 	}
 
-	if (query.startsWith(u"-100"_q)) {
-		const auto idPart = query.mid(4);
-		if (idPart.length() >= 1 && IsNumericString(idPart)) {
-			return { IdSearchType::ChatOnly, idPart.toLongLong() };
+	const auto idPart = query.mid(3).trimmed();
+	if (idPart.startsWith(u"-100"_q)) {
+		const auto chatId = idPart.mid(4);
+		if (chatId.length() >= 1 && IsNumericString(chatId)) {
+			return { IdSearchType::ChatOnly, chatId.toLongLong() };
 		}
 		return {};
 	}
-
-	if (query.length() >= 5 && IsNumericString(query)) {
-		return { IdSearchType::UserOnly, query.toLongLong() };
+	if (idPart.length() >= 5 && IsNumericString(idPart)) {
+		return { IdSearchType::Both, idPart.toLongLong() };
 	}
 
 	return {};
