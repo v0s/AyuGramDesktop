@@ -1,0 +1,25 @@
+diff --git a/options_win.cmake b/options_win.cmake
+index c2d66cf..d89d7c5 100644
+--- a/options_win.cmake
++++ b/options_win.cmake
+@@ -32,6 +32,7 @@ if (MSVC)
+         /utf-8
+         /W4
+         /MP     # Enable multi process build.
++        /FS
+         /EHsc   # Catch C++ exceptions only, extern C functions never throw a C++ exception.
+         /w15038 # wrong initialization order
+         /w14265 # class has virtual functions, but destructor is not virtual
+diff --git a/variables.cmake b/variables.cmake
+index d6ac6c5..1fd1cb0 100644
+--- a/variables.cmake
++++ b/variables.cmake
+@@ -21,7 +21,7 @@ if (DESKTOP_APP_SPECIAL_TARGET STREQUAL ""
+ endif()
+ 
+ set(CMAKE_CXX_SCAN_FOR_MODULES OFF CACHE BOOL "")
+-set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "ProgramDatabase" CACHE STRING "")
++set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<$<OR:$<CONFIG:Debug>,$<CONFIG:RelWithDebInfo>>:ProgramDatabase>$<$<AND:$<NOT:$<CONFIG:Debug>>,$<NOT:$<CONFIG:RelWithDebInfo>>>:Embedded>" CACHE STRING "" FORCE)
+ set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>" CACHE STRING "")
+ option(DESKTOP_APP_TEST_APPS "Build test apps, development only." OFF)
+ option(DESKTOP_APP_LOTTIE_DISABLE_RECOLORING "Disable recoloring of lottie animations." OFF)
