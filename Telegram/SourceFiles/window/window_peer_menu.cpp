@@ -710,6 +710,7 @@ void Filler::addToggleFolder() {
 
 void Filler::addToggleUnreadMark() {
 	const auto peer = _peer;
+	const auto controller = _controller;
 	const auto unread = MarkAsReadMenu::IsUnreadThread(_thread);
 	const auto history = _request.key.history();
 	if (!_thread || !_thread->canToggleUnread(unread)) {
@@ -735,10 +736,13 @@ void Filler::addToggleUnreadMark() {
 			} else {
 				MarkAsReadMenu::MarkAsReadThread(thread);
 			}
-		} else if (const auto sublist = thread->asSublist()) {
-			peer->owner().histories().changeSublistUnreadMark(sublist, true);
-		} else if (history) {
-			peer->owner().histories().changeDialogUnreadMark(history, true);
+		} else {
+			controller->keepLocalUnreadMarkWhileOpened(thread);
+			if (const auto sublist = thread->asSublist()) {
+				peer->owner().histories().changeSublistUnreadMark(sublist, true);
+			} else if (history) {
+				peer->owner().histories().changeDialogUnreadMark(history, true);
+			}
 		}
 	}, (unread ? &st::menuIconMarkRead : &st::menuIconMarkUnread));
 }

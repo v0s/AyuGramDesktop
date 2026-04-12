@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_chat_section.h"
 
+#include "ayu/ayu_settings.h"
 #include "history/admin_log/history_admin_log_section.h"
 #include "history/view/controls/history_view_top_controls.h"
 #include "history/view/controls/history_view_bottom_controls.h"
@@ -4198,7 +4199,6 @@ void ChatWidget::setReplies(std::shared_ptr<Data::RepliesList> replies) {
 void ChatWidget::subscribeToSublist() {
 	Expects(_sublist != nullptr);
 
-	// Must be done before unreadCountUpdated(), or we auto-close.
 	if (_sublist->unreadMark()) {
 		_sublist->owner().histories().changeSublistUnreadMark(
 			_sublist,
@@ -4241,9 +4241,13 @@ void ChatWidget::subscribeToSublist() {
 }
 
 void ChatWidget::unreadCountUpdated() {
+	const auto keepOpen = AyuSettings::getInstance()
+		.dontCloseChatOnMarkingUnread();
 	if (mode() == Mode::History) {
 		const auto migrated = _history->migrateFrom();
-		if (_history->unreadMark() || (migrated && migrated->unreadMark())) {
+		if (!keepOpen
+			&& (_history->unreadMark()
+				|| (migrated && migrated->unreadMark()))) {
 			crl::on_main(this, [=] {
 				closeCurrent();
 			});
@@ -4256,7 +4260,7 @@ void ChatWidget::unreadCountUpdated() {
 			: _history->amMonoforumAdmin()
 			? _history->chatListUnreadState().messages
 			: _history->chatListBadgesState().unreadCounter);
-	} else if (_sublist && _sublist->unreadMark()) {
+	} else if (!keepOpen && _sublist && _sublist->unreadMark()) {
 		crl::on_main(this, [=] {
 			const auto guard = base::make_weak(this);
 			controller()->showPeerHistory(_sublist->owningHistory());
@@ -4264,17 +4268,17 @@ void ChatWidget::unreadCountUpdated() {
 				closeCurrent();
 			}
 		});
-	} else {
-		refreshUnreadCountBadge(_replies
-			? (_replies->unreadCountKnown()
-				? _replies->unreadCountCurrent()
-				: std::optional<int>())
-			: _sublist
-			? (_sublist->unreadCountKnown()
-				? _sublist->unreadCountCurrent()
-				: std::optional<int>())
-			: std::optional<int>());
+		return;
 	}
+	refreshUnreadCountBadge(_replies
+		? (_replies->unreadCountKnown()
+			? _replies->unreadCountCurrent()
+			: std::optional<int>())
+		: _sublist
+		? (_sublist->unreadCountKnown()
+			? _sublist->unreadCountCurrent()
+			: std::optional<int>())
+		: std::optional<int>());
 }
 
 void ChatWidget::restoreState(not_null<ChatMemento*> memento) {

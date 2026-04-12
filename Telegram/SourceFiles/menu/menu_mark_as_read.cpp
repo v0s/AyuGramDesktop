@@ -94,14 +94,20 @@ void MarkAsReadThread(
 	const auto readHistory = [&](not_null<History*> history) {
 		history->owner().histories().readInbox(history);
 	};
-	if (!IsUnreadThread(thread)
-		|| ((muted == MarkAsReadMuted::Skip) && SkipMutedThread(thread))) {
+	if ((muted == MarkAsReadMuted::Skip) && SkipMutedThread(thread)) {
+		return;
+	}
+	thread->setKeepLocalUnreadMarkWhileOpened(false);
+	if (!IsUnreadThread(thread)) {
 		return;
 	} else if (const auto forum = thread->asForum()) {
 		forum->enumerateTopics([=](not_null<Data::ForumTopic*> topic) {
 			MarkAsReadThread(topic, muted);
 		});
 	} else if (const auto history = thread->asHistory()) {
+		if (const auto migrated = history->migrateSibling()) {
+			migrated->setKeepLocalUnreadMarkWhileOpened(false);
+		}
 		readHistory(history);
 		if (const auto migrated = history->migrateSibling()) {
 			readHistory(migrated);

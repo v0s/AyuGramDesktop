@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_top_bar_widget.h"
 
+#include "data/data_histories.h"
 #include "history/history.h"
 #include "history/view/history_view_send_action.h"
 #include "boxes/add_contact_box.h"
@@ -19,6 +20,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 #include "mainwidget.h"
 #include "mainwindow.h"
 #include "main/main_session.h"
+#include "menu/menu_mark_as_read.h"
 #include "mtproto/mtproto_config.h"
 #include "lang/lang_keys.h"
 #include "core/shortcuts.h"
@@ -501,13 +503,14 @@ void TopBarWidget::toggleUnreadMark() {
 	if (!thread) {
 		return;
 	}
-	const auto unread = Window::IsUnreadThread(thread);
+	const auto unread = MarkAsReadMenu::IsUnreadThread(thread);
 	if (!thread->canToggleUnread(unread)) {
 		return;
 	}
 	if (unread) {
-		Window::MarkAsReadThread(thread);
+		MarkAsReadMenu::MarkAsReadThread(thread);
 	} else {
+		_controller->keepLocalUnreadMarkWhileOpened(thread);
 		if (const auto sublist = thread->asSublist()) {
 			sublist->owner().histories().changeSublistUnreadMark(sublist, true);
 		} else if (const auto history = thread->asHistory()) {
@@ -1549,7 +1552,7 @@ void TopBarWidget::updateControlsVisibility() {
 			if (!thread) {
 				return std::nullopt;
 			}
-			const auto unread = Window::IsUnreadThread(thread);
+			const auto unread = MarkAsReadMenu::IsUnreadThread(thread);
 			return thread->canToggleUnread(unread)
 				? std::make_optional(unread)
 				: std::nullopt;
