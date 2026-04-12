@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_top_bar_widget.h"
 
+#include "data/data_histories.h"
 #include "history/history.h"
 #include "history/view/history_view_send_action.h"
 #include "boxes/add_contact_box.h"
@@ -489,6 +490,7 @@ void TopBarWidget::toggleUnreadMark() {
 	if (unread) {
 		Window::MarkAsReadThread(thread);
 	} else {
+		_controller->keepLocalUnreadMarkWhileOpened(thread);
 		if (const auto sublist = thread->asSublist()) {
 			sublist->owner().histories().changeSublistUnreadMark(sublist, true);
 		} else if (const auto history = thread->asHistory()) {

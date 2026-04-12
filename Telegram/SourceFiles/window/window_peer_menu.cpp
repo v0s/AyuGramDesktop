@@ -675,6 +675,7 @@ void Filler::addToggleFolder() {
 
 void Filler::addToggleUnreadMark() {
 	const auto peer = _peer;
+	const auto controller = _controller;
 	const auto unread = IsUnreadThread(_thread);
 	const auto history = _request.key.history();
 	if (!_thread || !_thread->canToggleUnread(unread)) {
@@ -691,10 +692,13 @@ void Filler::addToggleUnreadMark() {
 		}
 		if (unread) {
 			MarkAsReadThread(thread);
-		} else if (const auto sublist = thread->asSublist()) {
-			peer->owner().histories().changeSublistUnreadMark(sublist, true);
-		} else if (history) {
-			peer->owner().histories().changeDialogUnreadMark(history, true);
+		} else {
+			controller->keepLocalUnreadMarkWhileOpened(thread);
+			if (const auto sublist = thread->asSublist()) {
+				peer->owner().histories().changeSublistUnreadMark(sublist, true);
+			} else if (history) {
+				peer->owner().histories().changeDialogUnreadMark(history, true);
+			}
 		}
 	}, (unread ? &st::menuIconMarkRead : &st::menuIconMarkUnread));
 }
@@ -4155,6 +4159,7 @@ void MarkAsReadThread(not_null<Data::Thread*> thread) {
 	const auto readHistory = [&](not_null<History*> history) {
 		history->owner().histories().readInbox(history);
 	};
+	thread->setKeepLocalUnreadMarkWhileOpened(false);
 	if (!IsUnreadThread(thread)) {
 		return;
 	} else if (const auto forum = thread->asForum()) {
@@ -4162,6 +4167,9 @@ void MarkAsReadThread(not_null<Data::Thread*> thread) {
 			MarkAsReadThread(topic);
 		});
 	} else if (const auto history = thread->asHistory()) {
+		if (const auto migrated = history->migrateSibling()) {
+			migrated->setKeepLocalUnreadMarkWhileOpened(false);
+		}
 		readHistory(history);
 		if (const auto migrated = history->migrateSibling()) {
 			readHistory(migrated);

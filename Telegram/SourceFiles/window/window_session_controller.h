@@ -456,6 +456,8 @@ public:
 	void setActiveChatEntry(Dialogs::Key key);
 	Dialogs::RowDescriptor activeChatEntryCurrent() const;
 	Dialogs::Key activeChatCurrent() const;
+	bool isActiveChatThread(not_null<Data::Thread*> thread) const;
+	void keepLocalUnreadMarkWhileOpened(not_null<Data::Thread*> thread);
 	rpl::producer<Dialogs::RowDescriptor> activeChatEntryChanges() const;
 	rpl::producer<Dialogs::Key> activeChatChanges() const;
 	rpl::producer<Dialogs::RowDescriptor> activeChatEntryValue() const;

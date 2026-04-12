@@ -942,6 +942,12 @@ void AyuSettings::setQuickUnreadShortcut(bool val) {
 	save();
 }
 
+void AyuSettings::setDontCloseChatOnMarkingUnread(bool val) {
+	if (_dontCloseChatOnMarkingUnread.current() == val) return;
+	_dontCloseChatOnMarkingUnread = val;
+	save();
+}
+
 void AyuSettings::setShowPeerId(PeerIdDisplay val) {
 	if (_showPeerId.current() == val) return;
 	_showPeerId = val;
@@ -1110,6 +1116,7 @@ void to_json(nlohmann::json &j, const AyuSettings &s) {
 		{"channelBottomButton", s._channelBottomButton.current()},
 		{"quickAdminShortcuts", s._quickAdminShortcuts.current()},
 		{"quickUnreadShortcut", s._quickUnreadShortcut.current()},
+		{"dontCloseChatOnMarkingUnread", s._dontCloseChatOnMarkingUnread.current()},
 		{"showPeerId", s._showPeerId.current()},
 		{"showMessageSeconds", s._showMessageSeconds.current()},
 		{"showMessageShot", s._showMessageShot.current()},
@@ -1212,6 +1219,7 @@ void from_json(const nlohmann::json &j, AyuSettings &s) {
 	s._channelBottomButton = j.value("channelBottomButton", defaults._channelBottomButton.current());
 	s._quickAdminShortcuts = j.value("quickAdminShortcuts", defaults._quickAdminShortcuts.current());
 	s._quickUnreadShortcut = j.value("quickUnreadShortcut", defaults._quickUnreadShortcut.current());
+	s._dontCloseChatOnMarkingUnread = j.value("dontCloseChatOnMarkingUnread", defaults._dontCloseChatOnMarkingUnread.current());
 	s._showPeerId = j.value("showPeerId", defaults._showPeerId.current());
 	s._showMessageSeconds = j.value("showMessageSeconds", defaults._showMessageSeconds.current());
 	s._showMessageShot = j.value("showMessageShot", defaults._showMessageShot.current());

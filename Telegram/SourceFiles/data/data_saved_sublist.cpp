@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "data/data_saved_sublist.h"
 
+#include "ayu/ayu_settings.h"
 #include "api/api_unread_things.h"
 #include "apiwrap.h"
 #include "core/application.h"
@@ -676,7 +677,9 @@ void SavedSublist::readTill(
 	if (!IsServerMsgId(tillId)) {
 		return;
 	}
-	if (unreadMark()) {
+	if (unreadMark() && !(
+		AyuSettings::getInstance().dontCloseChatOnMarkingUnread()
+		&& keepLocalUnreadMarkWhileOpened())) {
 		owner().histories().changeSublistUnreadMark(this, false);
 	}
 	const auto was = computeInboxReadTillFull();

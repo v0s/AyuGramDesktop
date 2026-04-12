@@ -2210,6 +2210,10 @@ void SessionController::setActiveChatEntry(Dialogs::RowDescriptor row) {
 	if (was.key && was.key != row.key) {
 		session().api().saveCurrentDraftToCloud();
 	}
+	if (const auto thread = was.key.thread()
+		; thread && (thread != row.key.thread())) {
+		thread->setKeepLocalUnreadMarkWhileOpened(false);
+	}
 	const auto wasHistory = was.key.history();
 	const auto nowHistory = row.key.history();
 	if (wasHistory && wasHistory != nowHistory) {
@@ -2242,6 +2246,18 @@ void SessionController::setActiveChatEntry(Dialogs::RowDescriptor row) {
 		pushToChatEntryHistory(row);
 	}
 	checkInvitePeek();
+}
+
+bool SessionController::isActiveChatThread(not_null<Data::Thread*> thread) const {
+	return (activeChatCurrent().thread() == thread);
+}
+
+void SessionController::keepLocalUnreadMarkWhileOpened(
+		not_null<Data::Thread*> thread) {
+	if (AyuSettings::getInstance().dontCloseChatOnMarkingUnread()
+		&& isActiveChatThread(thread)) {
+		thread->setKeepLocalUnreadMarkWhileOpened(true);
+	}
 }
 
 void SessionController::checkInvitePeek() {

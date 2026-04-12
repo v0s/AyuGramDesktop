@@ -69,6 +69,7 @@ bool ChatPreviewManager::show(
 					MarkAsReadThread(thread);
 				} else if (action.markUnread) {
 					if (const auto history = thread->asHistory()) {
+						controller->keepLocalUnreadMarkWhileOpened(history);
 						history->owner().histories().changeDialogUnreadMark(
 							history,
 							true);

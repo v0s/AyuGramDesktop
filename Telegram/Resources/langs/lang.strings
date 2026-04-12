@@ -7986,6 +7986,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_HideReactionsInPrivateChats" = "Private Chats";
 "ayu_QuickAdminShortcuts" = "Quick Admin Shortcuts";
 "ayu_QuickUnreadShortcut" = "Quick Unread Shortcut";
+"ayu_DontCloseChatOnMarkingUnread" = "Don't Close Chat on Marking Unread";
 "ayu_TranslationProvider" = "Translation Provider";
 "ayu_LinksHeader" = "Links";
 "ayu_LinksChannel" = "Channel";

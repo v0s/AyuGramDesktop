@@ -1977,7 +1977,9 @@ bool History::readInboxTillNeedsRequest(MsgId tillId) {
 	Expects(!tillId || IsServerMsgId(tillId));
 
 	readClientSideMessages();
-	if (unreadMark()) {
+	if (unreadMark() && !(
+		AyuSettings::getInstance().dontCloseChatOnMarkingUnread()
+		&& keepLocalUnreadMarkWhileOpened())) {
 		owner().histories().changeDialogUnreadMark(this, false);
 	}
 	DEBUG_LOG(("Reading: readInboxTillNeedsRequest is_server %1, before %2."

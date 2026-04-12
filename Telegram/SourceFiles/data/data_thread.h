@@ -104,6 +104,10 @@ public:
 	[[nodiscard]] bool unreadMark() const {
 		return (_flags & Flag::UnreadMark);
 	}
+	[[nodiscard]] bool keepLocalUnreadMarkWhileOpened() const {
+		return (_flags & Flag::KeepLocalUnreadMarkWhileOpened);
+	}
+	void setKeepLocalUnreadMarkWhileOpened(bool enabled);
 
 	[[nodiscard]] virtual bool isServerSideUnread(
 		not_null<const HistoryItem*> item) const = 0;
@@ -136,6 +140,7 @@ private:
 		Muted = (1 << 1),
 		UnreadThingsKnown = (1 << 2),
 		HasPinnedMessages = (1 << 3),
+		KeepLocalUnreadMarkWhileOpened = (1 << 4),
 	};
 	friend inline constexpr bool is_flag_type(Flag) { return true; }
 

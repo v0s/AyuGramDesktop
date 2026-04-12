@@ -7,6 +7,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 */
 #include "history/view/history_view_chat_section.h"
 
+#include "ayu/ayu_settings.h"
 #include "history/view/controls/history_view_compose_controls.h"
 #include "history/view/controls/history_view_compose_search.h"
 #include "history/view/controls/history_view_draft_options.h"
@@ -2627,7 +2628,6 @@ void ChatWidget::setReplies(std::shared_ptr<Data::RepliesList> replies) {
 void ChatWidget::subscribeToSublist() {
 	Expects(_sublist != nullptr);
 
-	// Must be done before unreadCountUpdated(), or we auto-close.
 	if (_sublist->unreadMark()) {
 		_sublist->owner().histories().changeSublistUnreadMark(
 			_sublist,
@@ -2669,7 +2669,9 @@ void ChatWidget::subscribeToSublist() {
 }
 
 void ChatWidget::unreadCountUpdated() {
-	if (_sublist && _sublist->unreadMark()) {
+	if (!AyuSettings::getInstance().dontCloseChatOnMarkingUnread()
+		&& _sublist
+		&& _sublist->unreadMark()) {
 		crl::on_main(this, [=] {
 			const auto guard = base::make_weak(this);
 			controller()->showPeerHistory(_sublist->owningHistory());
@@ -2677,17 +2679,17 @@ void ChatWidget::unreadCountUpdated() {
 				closeCurrent();
 			}
 		});
-	} else {
-		refreshUnreadCountBadge(_replies
-			? (_replies->unreadCountKnown()
-				? _replies->unreadCountCurrent()
-				: std::optional<int>())
-			: _sublist
-			? (_sublist->unreadCountKnown()
-				? _sublist->unreadCountCurrent()
-				: std::optional<int>())
-			: std::optional<int>());
+		return;
 	}
+	refreshUnreadCountBadge(_replies
+		? (_replies->unreadCountKnown()
+			? _replies->unreadCountCurrent()
+			: std::optional<int>())
+		: _sublist
+		? (_sublist->unreadCountKnown()
+			? _sublist->unreadCountCurrent()
+			: std::optional<int>())
+		: std::optional<int>());
 }
 
 void ChatWidget::restoreState(not_null<ChatMemento*> memento) {

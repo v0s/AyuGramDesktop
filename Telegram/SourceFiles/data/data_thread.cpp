@@ -204,11 +204,20 @@ void Thread::setMuted(bool muted) {
 	}
 }
 
+void Thread::setKeepLocalUnreadMarkWhileOpened(bool enabled) {
+	if (enabled) {
+		_flags |= Flag::KeepLocalUnreadMarkWhileOpened;
+	} else {
+		_flags &= ~Flag::KeepLocalUnreadMarkWhileOpened;
+	}
+}
+
 void Thread::setUnreadMarkFlag(bool unread) {
 	if (unread) {
 		_flags |= Flag::UnreadMark;
 	} else {
 		_flags &= ~Flag::UnreadMark;
+		_flags &= ~Flag::KeepLocalUnreadMarkWhileOpened;
 	}
 }
 

@@ -124,6 +124,12 @@ void BuildGroupsAndChannels(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setQuickUnreadShortcut,
 	});
 	ayu.addSettingToggle({
+		.id = u"ayu/dontCloseChatOnMarkingUnread"_q,
+		.title = tr::ayu_DontCloseChatOnMarkingUnread(),
+		.getter = &AyuSettings::dontCloseChatOnMarkingUnread,
+		.setter = &AyuSettings::setDontCloseChatOnMarkingUnread,
+	});
+	ayu.addSettingToggle({
 		.id = u"ayu/showMessageShot"_q,
 		.title = tr::ayu_SettingsShowMessageShot(),
 		.getter = &AyuSettings::showMessageShot,

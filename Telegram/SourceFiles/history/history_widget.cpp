@@ -2998,7 +2998,6 @@ void HistoryWidget::showHistory(
 			session().data().histories().requestDialogEntry(_history);
 		}
 
-		// Must be done before unreadCountUpdated(), or we auto-close.
 		if (_history->unreadMark()) {
 			session().data().histories().changeDialogUnreadMark(
 				_history,
@@ -4073,21 +4072,22 @@ void HistoryWidget::handleDrawToReplyRequest(
 }
 
 void HistoryWidget::unreadCountUpdated() {
-	if (_history->unreadMark() || (_migrated && _migrated->unreadMark())) {
+	if (!AyuSettings::getInstance().dontCloseChatOnMarkingUnread()
+		&& (_history->unreadMark() || (_migrated && _migrated->unreadMark()))) {
 		crl::on_main(this, [=, history = _history] {
 			if (history == _history) {
 				closeCurrent();
 			}
 		});
-	} else {
-		const auto hideCounter = _history->isForum()
-			|| !_history->trackUnreadMessages();
-		_cornerButtons.updateJumpDownVisibility(hideCounter
-			? 0
-			: _history->amMonoforumAdmin()
-			? _history->chatListUnreadState().messages
-			: _history->chatListBadgesState().unreadCounter);
+		return;
 	}
+	const auto hideCounter = _history->isForum()
+		|| !_history->trackUnreadMessages();
+	_cornerButtons.updateJumpDownVisibility(hideCounter
+		? 0
+		: _history->amMonoforumAdmin()
+		? _history->chatListUnreadState().messages
+		: _history->chatListBadgesState().unreadCounter);
 }
 
 void HistoryWidget::closeCurrent() {

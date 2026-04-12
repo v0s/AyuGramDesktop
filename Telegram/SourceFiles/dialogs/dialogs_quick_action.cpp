@@ -99,6 +99,7 @@ void PerformQuickDialogAction(
 			controller->showToast(
 				tr::lng_quick_dialog_action_toast_read_success(tr::now));
 		} else if (history) {
+			controller->keepLocalUnreadMarkWhileOpened(history);
 			peer->owner().histories().changeDialogUnreadMark(history, true);
 			controller->showToast(
 				tr::lng_quick_dialog_action_toast_unread_success(tr::now));
