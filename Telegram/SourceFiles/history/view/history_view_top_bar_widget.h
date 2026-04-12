@@ -152,6 +152,7 @@ private:
 	void groupCall();
 	void showGroupCallMenu(not_null<PeerData*> peer);
 	void showCallMenu();
+	void toggleUnreadMark();
 	void toggleInfoSection();
 
 	[[nodiscard]] bool createMenu(
@@ -243,6 +244,7 @@ private:
 	object_ptr<Ui::IconButton> _menuToggle;
 	object_ptr<Ui::IconButton> _recentActions;
 	object_ptr<Ui::IconButton> _admins;
+	object_ptr<Ui::IconButton> _markUnread;
 	base::unique_qptr<Ui::PopupMenu> _menu;
 
 	object_ptr<RpWidget> _membersShowArea = { nullptr };

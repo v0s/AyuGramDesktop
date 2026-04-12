@@ -140,6 +140,7 @@ TopBarWidget::TopBarWidget(
 , _menuToggle(this, st::topBarMenuToggle)
 , _recentActions(this, st::topBarRecentActions)
 , _admins(this, st::topBarAdmins)
+, _markUnread(this, st::topBarUnread)
 , _titlePeerText(st::windowMinWidth / 3)
 , _onlineUpdater([=] { updateOnlineDisplay(); }) {
 	setAttribute(Qt::WA_OpaquePaintEvent);
@@ -188,8 +189,13 @@ TopBarWidget::TopBarWidget(
 			ParticipantsBoxController::Role::Admins
 		);
 	});
+	_markUnread->setClickedCallback([=] { toggleUnreadMark(); });
 
 	AyuSettings::getInstance().quickAdminShortcutsChanges(
+	) | rpl::on_next([=](bool) {
+		updateControlsVisibility();
+	}, lifetime());
+	AyuSettings::getInstance().quickUnreadShortcutChanges(
 	) | rpl::on_next([=](bool) {
 		updateControlsVisibility();
 	}, lifetime());
@@ -290,6 +296,7 @@ TopBarWidget::TopBarWidget(
 	_call->setAccessibleName(tr::lng_profile_action_short_call(tr::now));
 	_groupCall->setAccessibleName(tr::lng_group_call_title(tr::now));
 	_search->setAccessibleName(tr::lng_shortcuts_search(tr::now));
+	_markUnread->setAccessibleName(tr::lng_context_mark_unread(tr::now));
 	_infoToggle->setAccessibleName(tr::lng_settings_section_info(tr::now));
 	_menuToggle->setAccessibleName(tr::lng_chat_menu(tr::now));
 	_back->setAccessibleName(tr::lng_go_back(tr::now));
@@ -468,6 +475,27 @@ void TopBarWidget::showCallMenu() {
 	_menu->popup(mapToGlobal(QPoint(
 		_call->x() + _call->width() + st::topBarMenuGroupCallSkip,
 		st::topBarMenuPosition.y())));
+}
+
+void TopBarWidget::toggleUnreadMark() {
+	const auto thread = _activeChat.key.thread();
+	if (!thread) {
+		return;
+	}
+	const auto unread = Window::IsUnreadThread(thread);
+	if (!thread->canToggleUnread(unread)) {
+		return;
+	}
+	if (unread) {
+		Window::MarkAsReadThread(thread);
+	} else {
+		if (const auto sublist = thread->asSublist()) {
+			sublist->owner().histories().changeSublistUnreadMark(sublist, true);
+		} else if (const auto history = thread->asHistory()) {
+			history->owner().histories().changeDialogUnreadMark(history, true);
+		}
+	}
+	updateControlsVisibility();
 }
 
 void TopBarWidget::toggleInfoSection() {
@@ -895,13 +923,15 @@ void TopBarWidget::setActiveChat(
 		!= activeChat.key.topic());
 	const auto peerChanged = (_activeChat.key.history()
 		!= activeChat.key.history());
+	const auto sublistChanged = (_activeChat.key.sublist()
+		!= activeChat.key.sublist());
 
 	_activeChat = activeChat;
 	_titlePeerText.clear();
 	_back->clearState();
 	update();
 
-	if (peerChanged || topicChanged) {
+	if (peerChanged || topicChanged || sublistChanged) {
 		_titleBadge.unload();
 		_titleNameVersion = 0;
 		_emojiInteractionSeen = nullptr;
@@ -937,12 +967,28 @@ void TopBarWidget::setActiveChat(
 		}
 
 		if (const auto history = _activeChat.key.history()) {
+			session().changes().historyUpdates(
+				history,
+				Data::HistoryUpdate::Flag::UnreadView
+			) | rpl::on_next([=] {
+				updateControlsVisibility();
+			}, _activeChatLifetime);
+
 			using InteractionSeen = ChatHelpers::EmojiInteractionSeen;
 			_controller->emojiInteractions().seen(
 			) | rpl::filter([=](const InteractionSeen &seen) {
 				return (seen.peer == history->peer);
 			}) | rpl::on_next([=](const InteractionSeen &seen) {
 				handleEmojiInteractionSeen(seen.emoticon);
+			}, _activeChatLifetime);
+		}
+
+		if (const auto sublist = _activeChat.key.sublist()) {
+			session().changes().sublistUpdates(
+				sublist,
+				Data::SublistUpdate::Flag::UnreadView
+			) | rpl::on_next([=] {
+				updateControlsVisibility();
 			}, _activeChatLifetime);
 		}
 
@@ -1250,6 +1296,10 @@ void TopBarWidget::updateControlsGeometry() {
 	if (!_admins->isHidden()) {
 		_rightTaken += _admins->width();
 	}
+	_markUnread->moveToRight(_rightTaken, otherButtonsTop);
+	if (!_markUnread->isHidden()) {
+		_rightTaken += _markUnread->width();
+	}
 
 	_search->moveToRight(_rightTaken, otherButtonsTop);
 	if (!_search->isHidden()) {
@@ -1376,9 +1426,7 @@ void TopBarWidget::updateControlsVisibility() {
 		&& _controller->canShowThirdSection()
 		&& !_chooseForReportReason);
 
-	const auto showRecentActions = [&]
-	{
-		const auto &settings = AyuSettings::getInstance();
+	const auto showRecentActions = [&] {
 		if (!settings.quickAdminShortcuts()) {
 			return false;
 		}
@@ -1394,9 +1442,7 @@ void TopBarWidget::updateControlsVisibility() {
 		return false;
 	}();
 	_recentActions->setVisible(showRecentActions);
-	const auto showAdmins = [&]
-	{
-		const auto &settings = AyuSettings::getInstance();
+	const auto showAdmins = [&] {
 		if (!settings.quickAdminShortcuts()) {
 			return false;
 		}
@@ -1415,6 +1461,24 @@ void TopBarWidget::updateControlsVisibility() {
 		return false;
 	}();
 	_admins->setVisible(showAdmins);
+	const auto markUnreadState = settings.quickUnreadShortcut()
+		&& !_chooseForReportReason
+		&& (_activeChat.section != Section::ChatsList)
+		? [&]() -> std::optional<bool> {
+			const auto thread = _activeChat.key.thread();
+			if (!thread) {
+				return std::nullopt;
+			}
+			const auto unread = Window::IsUnreadThread(thread);
+			return thread->canToggleUnread(unread)
+				? std::make_optional(unread)
+				: std::nullopt;
+		}()
+		: std::nullopt;
+	_markUnread->setVisible(markUnreadState.has_value());
+	_markUnread->setAccessibleName(markUnreadState == true
+		? tr::lng_context_mark_read(tr::now)
+		: tr::lng_context_mark_unread(tr::now));
 
 	const auto callsEnabled = [&] {
 		if (const auto peer = _activeChat.key.peer()) {

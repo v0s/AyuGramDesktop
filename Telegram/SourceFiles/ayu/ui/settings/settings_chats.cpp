@@ -118,6 +118,12 @@ void BuildGroupsAndChannels(SectionBuilder &builder, AyuSectionBuilder &ayu) {
 		.setter = &AyuSettings::setQuickAdminShortcuts,
 	});
 	ayu.addSettingToggle({
+		.id = u"ayu/quickUnreadShortcut"_q,
+		.title = tr::ayu_QuickUnreadShortcut(),
+		.getter = &AyuSettings::quickUnreadShortcut,
+		.setter = &AyuSettings::setQuickUnreadShortcut,
+	});
+	ayu.addSettingToggle({
 		.id = u"ayu/showMessageShot"_q,
 		.title = tr::ayu_SettingsShowMessageShot(),
 		.getter = &AyuSettings::showMessageShot,

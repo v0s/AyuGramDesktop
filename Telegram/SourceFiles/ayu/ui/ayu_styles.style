@@ -59,6 +59,21 @@ topBarRecentActions: IconButton {
 	}
 }
 
+topBarUnread: IconButton {
+	width: 40px;
+	height: topBarHeight;
+
+	icon: icon {{ "ayu/top_bar_unread", menuIconFg }};
+	iconOver: icon {{ "ayu/top_bar_unread", menuIconFgOver }};
+	iconPosition: point(4px, 11px);
+
+	rippleAreaPosition: point(0px, 7px);
+	rippleAreaSize: 40px;
+	ripple: RippleAnimation(defaultRippleAnimation) {
+		color: windowBgOver;
+	}
+}
+
 exteraBadgeToast: Toast(defaultToast) {
 	minWidth: 40px;
 	maxWidth: 480px;
