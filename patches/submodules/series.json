@@ -1,3 +1,9 @@
 {
-  "patches": []
+  "patches": [
+    {
+      "module": "Telegram/lib_ui",
+      "revision": "ec0c178bd2aa2acab3c0ca001f18cf9ac8ab89a2",
+      "patch": "windows-maximized-monitor-transfer.patch"
+    }
+  ]
 }

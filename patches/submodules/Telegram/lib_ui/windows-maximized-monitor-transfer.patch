@@ -1,0 +1,31 @@
+diff --git a/ui/platform/win/ui_window_win.cpp b/ui/platform/win/ui_window_win.cpp
+index 5f6c6095389d2a44925619a367db9ebe69791b63..c32b35cfb11be918f5257e076aafea7c5a26be45 100644
+--- a/ui/platform/win/ui_window_win.cpp
++++ b/ui/platform/win/ui_window_win.cpp
+@@ -887,11 +887,11 @@ void WindowHelper::updateMargins() {
+ 			m.right - w.right,
+ 			m.bottom - w.bottom);
+ 
+-		margins.setLeft(margins.left() - _marginsDelta.left());
+-		margins.setRight(margins.right() - _marginsDelta.right());
+-		margins.setBottom(margins.bottom() - _marginsDelta.bottom());
+-		margins.setTop(margins.top() - _marginsDelta.top());
++		margins = QMargins(0, margins.top() - _marginsDelta.top(), 0, 0);
+ 	} else if (!_marginsDelta.isNull()) {
++		const auto delta = nativeResize()
++			? QMargins(0, _marginsDelta.top(), 0, 0)
++			: _marginsDelta;
+ 		RECT w;
+ 		GetWindowRect(_handle, &w);
+ 		SetWindowPos(
+@@ -899,8 +899,8 @@ void WindowHelper::updateMargins() {
+ 			0,
+ 			0,
+ 			0,
+-			w.right - w.left - _marginsDelta.left() - _marginsDelta.right(),
+-			w.bottom - w.top - _marginsDelta.top() - _marginsDelta.bottom(),
++			w.right - w.left - delta.left() - delta.right(),
++			w.bottom - w.top - delta.top() - delta.bottom(),
+ 			(SWP_NOMOVE
+ 				| SWP_NOSENDCHANGING
+ 				| SWP_NOZORDER
