@@ -13,6 +13,7 @@ sys.path.append(scriptPath + '/../cmake')
 import run_cmake
 sys.path.append(scriptPath + '/build')
 import qt_version
+import apply_submodule_patches
 
 executePath = os.getcwd()
 def finish(code):
@@ -65,5 +66,11 @@ if officialTarget != '':
                 arguments.append('-DTDESKTOP_API_HASH=' + apiHashMatch.group(1))
     if arch != '':
         arguments.append(arch)
+
+try:
+    apply_submodule_patches.run(
+        os.path.abspath(scriptPath + '/..'))
+except (RuntimeError, OSError, ValueError, KeyError) as exception:
+    error(str(exception))
 
 finish(run_cmake.run(scriptName, arguments))
