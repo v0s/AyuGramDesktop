@@ -8893,6 +8893,7 @@ https://github.com/telegramdesktop/tdesktop/blob/master/LEGAL
 "ayu_EditedMarkText" = "Edited Mark";
 "ayu_ReplaceMarksWithIcons" = "Replace with Icons";
 "ayu_SemiTransparentDeletedMessages" = "Translucent Deleted Messages";
+"ayu_OldFullWidthBubbleOnLineWrap" = "Old Full-width Bubble on Line-wrap";
 "ayu_HideNotificationCounters" = "Hide Notification Counters";
 "ayu_HideNotificationBadge" = "Hide Notification Badge";
 "ayu_NotificationBadgeResetOnFocus" = "Notification Badge Reset on Focus";
