@@ -236,6 +236,13 @@ void BuildMarks(
 		ayu.addBetaBadge(semiTransparent);
 	}
 
+	ayu.addSettingToggle({
+		.id = u"ayu/oldFullWidthBubbleOnLineWrap"_q,
+		.title = tr::ayu_OldFullWidthBubbleOnLineWrap(),
+		.getter = &AyuSettings::oldFullWidthBubbleOnLineWrap,
+		.setter = &AyuSettings::setOldFullWidthBubbleOnLineWrap,
+	});
+
 	ayu.addSectionDivider();
 }
 

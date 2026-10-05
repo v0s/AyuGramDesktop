@@ -132,6 +132,8 @@ MessagePreview::MessagePreview(
 			| rpl::to_empty,
 		AyuSettings::getInstance().simpleQuotesAndRepliesChanges()
 			| rpl::to_empty,
+		AyuSettings::getInstance().oldFullWidthBubbleOnLineWrapChanges()
+			| rpl::to_empty,
 		AyuSettings::getInstance().semiTransparentDeletedMessagesChanges()
 			| rpl::to_empty
 	) | rpl::on_next([=] {

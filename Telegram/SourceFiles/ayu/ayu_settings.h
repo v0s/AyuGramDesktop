@@ -274,6 +274,7 @@ public:
 	[[nodiscard]] bool filtersEnabledInChats() const { return _filtersEnabledInChats.current(); }
 	[[nodiscard]] bool hideFromBlocked() const { return _hideFromBlocked.current(); }
 	[[nodiscard]] bool semiTransparentDeletedMessages() const { return _semiTransparentDeletedMessages.current(); }
+	[[nodiscard]] bool oldFullWidthBubbleOnLineWrap() const { return _oldFullWidthBubbleOnLineWrap.current(); }
 	[[nodiscard]] bool disableAds() const { return _disableAds.current(); }
 	[[nodiscard]] bool disableStories() const { return _disableStories.current(); }
 	[[nodiscard]] bool disableCustomBackgrounds() const { return _disableCustomBackgrounds.current(); }
@@ -364,6 +365,7 @@ public:
 	void setFiltersEnabledInChats(bool val);
 	void setHideFromBlocked(bool val);
 	void setSemiTransparentDeletedMessages(bool val);
+	void setOldFullWidthBubbleOnLineWrap(bool val);
 	void setDisableAds(bool val);
 	void setDisableStories(bool val);
 	void setDisableCustomBackgrounds(bool val);
@@ -463,6 +465,8 @@ public:
 	[[nodiscard]] rpl::producer<bool> hideFromBlockedChanges() const { return _hideFromBlocked.changes(); }
 	[[nodiscard]] rpl::producer<bool> semiTransparentDeletedMessagesValue() const { return _semiTransparentDeletedMessages.value(); }
 	[[nodiscard]] rpl::producer<bool> semiTransparentDeletedMessagesChanges() const { return _semiTransparentDeletedMessages.changes(); }
+	[[nodiscard]] rpl::producer<bool> oldFullWidthBubbleOnLineWrapValue() const { return _oldFullWidthBubbleOnLineWrap.value(); }
+	[[nodiscard]] rpl::producer<bool> oldFullWidthBubbleOnLineWrapChanges() const { return _oldFullWidthBubbleOnLineWrap.changes(); }
 	[[nodiscard]] rpl::producer<bool> disableAdsValue() const { return _disableAds.value(); }
 	[[nodiscard]] rpl::producer<bool> disableAdsChanges() const { return _disableAds.changes(); }
 	[[nodiscard]] rpl::producer<bool> disableStoriesValue() const { return _disableStories.value(); }
@@ -644,6 +648,7 @@ private:
 	rpl::variable<bool> _filtersEnabledInChats = false;
 	rpl::variable<bool> _hideFromBlocked = false;
 	rpl::variable<bool> _semiTransparentDeletedMessages = false;
+	rpl::variable<bool> _oldFullWidthBubbleOnLineWrap = false;
 	rpl::variable<bool> _disableAds = true;
 	rpl::variable<bool> _disableStories = false;
 	rpl::variable<bool> _disableCustomBackgrounds = false;

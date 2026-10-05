@@ -290,6 +290,15 @@ Session::Session(not_null<Main::Session*> session)
 	setupPeerNameViewer();
 	setupUserIsContactViewer();
 
+	AyuSettings::getInstance().oldFullWidthBubbleOnLineWrapChanges(
+	) | rpl::on_next([=] {
+		for (const auto &[item, views] : _views) {
+			for (const auto &view : views) {
+				requestViewResize(view);
+			}
+		}
+	}, _lifetime);
+
 	_chatsList.unreadStateChanges(
 	) | rpl::on_next([=] {
 		notifyUnreadBadgeChanged();

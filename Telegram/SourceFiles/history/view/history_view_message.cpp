@@ -6386,7 +6386,10 @@ QRect Message::countGeometry() const {
 		const auto use = (appearing && appearing->use)
 			? appearing->shownWidth
 			: textRealWidth();
-		if (use > 0) {
+		if (use > 0
+			&& (hasRichPage()
+				|| !AyuSettings::getInstance().oldFullWidthBubbleOnLineWrap()
+				|| (appearing && appearing->use))) {
 			const auto shrunk = std::max(
 				use + st::msgPadding.left() + st::msgPadding.right(),
 				int(_nonTextMaxWidth));
@@ -6523,7 +6526,11 @@ int Message::resizeContentGetHeight(int newWidth) {
 			}
 		}
 	}
-	if (!mediaDisplayed && bubble && hasVisibleText()) {
+	if (!mediaDisplayed
+		&& bubble
+		&& hasVisibleText()
+		&& (hasRichPage()
+			|| !AyuSettings::getInstance().oldFullWidthBubbleOnLineWrap())) {
 		const auto probeTextWidth = bubbleTextWidth(contentWidth);
 		[[maybe_unused]] const auto probe = textHeightFor(probeTextWidth);
 		if (!Get<TextAppearing>()) {
